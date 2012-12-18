@@ -115,7 +115,7 @@
     (& (f c) g))
   ((inst ufold a b (Graph c d)) map-f ((inst g-empty c d)) g))
 
-(define: (a b) (g-reverse [g : (Graph a b)]) : (Graph a b)
+(define: (a b) (grev [g : (Graph a b)]) : (Graph a b)
   (: swap ((Context a b) -> (Context a b)))
   (define (swap c)
     (match-define (vector p v l s) c)
@@ -134,6 +134,10 @@
   (match-define (vector _ _ _ s) c)
   ((inst map Node (AdjPair b)) cdr s))
 
+(define: (a b) (pre [c : (Context a b)]) : (Listof Node)
+  (match-define (vector p _ _ _) c)
+  ((inst map Node (AdjPair b)) cdr p))
+
 (define: (a b) (gsuc [v : Node] [g : (Graph a b)]) : (Listof Node)
   (match (&vt v g)
     [(cons c sg)
@@ -148,7 +152,9 @@
 (define: (a b) (del [v : Node] [g : (Graph a b)]) : (Graph a b)
   (match (&vt v g)
     [(cons c sg)
-     sg]))
+     sg]
+    [#f
+     g]))
 
 (define: (a b) (dfs [vs : (Listof Node)] [g : (Graph a b)]) : (Listof Node)
   (match vs
@@ -168,28 +174,160 @@
 (define-struct: (a) Tree ([e : a] [kids : (Listof (Tree a))])
   #:transparent)
 
-(define: (a b) (df [vs : (Listof Node)] [g : (Graph a b)]) : (Pairof (Listof (Tree Node)) (Graph a b))
+(define: (a) (postorder [t : (Tree a)]) : (Listof a)
+  (match-define (Tree v ts) t)
+  (append ((inst append-map a (Tree a)) postorder ts)
+          (list v)))
+
+(define: (a b) (df [vs : (Listof Node)] [g : (Graph a b)])
+  : (values (Listof (Tree Node)) (Graph a b))
   (match vs
     [(list)
-     (cons empty g)]
+     (values empty g)]
     [(list-rest v vs)
      (match (&vt v g)
        [(cons c g)
-        (match-define (cons f g_1) (df (suc c) g))
-        (match-define (cons f-p g_2) (df vs g_1))
-        (cons (cons (Tree v f) f-p)
-              g_2)]
+        (define-values (f g_1) (df (suc c) g))
+        (define-values (f-p g_2) (df vs g_1))
+        (values (cons (Tree v f) f-p)
+                g_2)]
        [#f
         (df vs g)])]))
 
-(define: (a b) (dff [vs : (Listof Node)] [g : (Graph a b)]) : (Listof (Tree Node))
-  (car (df vs g)))
+(define: (a b) (dff [vs : (Listof Node)] [g : (Graph a b)])
+  : (Listof (Tree Node))
+  (define-values (fst snd) (df vs g))
+  fst)
 
 (module+ test
   (dff (nodes Figure1) Figure1)
   (dff (nodes Figure1-p) Figure1-p))
 
-;; XXX topsort
-;; XXX scc
+(define: (a b) (topsort [g : (Graph a b)])
+  : (Listof Node)
+  (define vs (nodes g))
+  (reverse ((inst append-map Node (Tree Node)) postorder (dff vs g))))
 
-;; Section 4.2
+(module+ test
+  (topsort Figure1)
+  (topsort Figure1-p))
+
+(define: (a b) (scc [g : (Graph a b)])
+  : (Listof (Tree Node))
+  (dff (topsort g) (grev g)))
+
+(module+ test
+  (scc Figure1)
+  (scc Figure1-p))
+
+(define: (a b) (bfs [vs : (Listof Node)] [g : (Graph a b)])
+  : (Listof Node)
+  (match vs
+    [(list)
+     empty]
+    [(list-rest v vs)
+     (match (&vt v g)
+       [(cons c g)
+        (cons v (bfs (append vs (suc c)) g))]
+       [#f
+        (bfs vs g)])]))
+
+(module+ test
+  (bfs (nodes Figure1) Figure1)
+  (bfs (nodes Figure1-p) Figure1-p))
+
+(define-type Path (Listof Node))
+(define-type RTree (Listof Path))
+
+(define: (a b) (bft [v : Node] [g : (Graph a b)])
+  : RTree
+  (bf (list (list v)) g))
+
+(define: (a b) (bf [ps : RTree] [g : (Graph a b)])
+  : RTree
+  (match ps
+    [(list)
+     empty]
+    [(list-rest p ps)
+     (match p
+       [(list-rest v _)
+        (match (&vt v g)
+          [(cons c g)
+           (cons p
+                 (bf (append ps
+                             (map
+                              (λ: ([more : Node])
+                                  (cons more p))
+                              (suc c)))
+                     g))]
+          [#f
+           (bf ps g)])]
+       [_
+        (bf ps g)])]))
+
+(module+ test
+  (bf ((inst map Path Node) list (nodes Figure1)) Figure1)
+  (bf ((inst map Path Node) list (nodes Figure1-p)) Figure1-p))
+
+(define: (a) (first-such-that [p : (a -> Boolean)] [l : (Listof a)]) : a
+  (first (filter p l)))
+
+(define: (a b) (esp [s : Node] [t : Node] [g : (Graph a b)]) : Path
+  (define (first-is-t vs)
+    (match-define (list-rest v _) vs)
+    (equal? v t))
+  (reverse (first-such-that first-is-t (bft s g))))
+
+(module+ test
+  (esp 1 2 Figure1)
+  (esp 1 3 Figure1)
+  (esp 2 3 Figure1))
+
+(define-type (LNode a) (Pairof Node a))
+(define-type (LPath a) (Listof (LNode a)))
+(define-type (LRTree a) (Listof (LPath a)))
+
+(define: (a) (getPath [v : Node] [l : (LRTree a)]) : Path
+  (define (first-is-v x)
+    (match-define (list-rest (cons w _) _) x)
+    (equal? w v))
+  (reverse ((inst map Node (LNode a)) car (first-such-that first-is-v l))))
+
+;; XXX expand (pg 22)
+;; XXX dijkstra (pg 22)
+;; XXX spt (pg 22)
+;; XXX sp (pg 22)
+
+;; XXX addEdges (pg 23)
+;; XXX mst (pg 23)
+;; XXX prim (pg 23)
+;; XXX mstp (pg 23)
+;; XXX joinPaths (pg 23)
+;; XXX joinAt (pg 23)
+
+(define: (a b) (indep [g : (Graph a b)])
+  : (Listof Node)
+  (cond
+    [(g-empty? g)
+     empty]
+    [else
+     (define vs 
+       (nodes g))
+     (define v
+       (argmax (λ: ([v : Node]) (deg v g)) vs))     
+     (: g-p (Graph a b))
+     (match-define (cons c g-p) (&vt v g))
+     (define i₁ (indep g-p))
+     (: next (Listof Node))
+     (define next
+       (append (pre c) (suc c)))
+     (: next-g (Graph a b))
+     (define next-g
+       (foldr (inst del a b) g-p next))
+     (define i₂ (cons v (indep next-g)))
+     (if ((length i₁) . > . (length i₂))
+       i₁
+       i₂)]))
+
+(module+ test
+  (indep Figure1))

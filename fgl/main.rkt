@@ -1,5 +1,4 @@
 #lang typed/racket
-(require/typed typed/racket [hash (All (a b) (-> (HashTable a b)))])
 
 (define-type Node Integer)
 (define-type (AdjPair b)
@@ -37,6 +36,7 @@
   (and pos
        (&vt (hash-iterate-key g pos) g)))
 
+(: &vt (All (a b) (Node (Graph a b) -> (Option (cons (Context a b) (Graph a b))))))
 (define: (a b) (&vt [top-v : Node] [g : (Graph a b)]) :  (Option (cons (Context a b) (Graph a b)))
   (cond
     [(hash-has-key? g top-v)
@@ -89,6 +89,7 @@
     [(cons c g)
      #f]))
 
+(: ufold (All (a b c) (((Context a b) c -> c) c (Graph a b) -> c)))
 (define: (a b c) (ufold [f : ((Context a b) c -> c)] [u : c] [g : (Graph a b)]) : c
   (match (&any g)
     [#f
@@ -156,6 +157,7 @@
     [#f
      g]))
 
+(: dfs (All (a b) ((Listof Node) (Graph a b) -> (Listof Node))))
 (define: (a b) (dfs [vs : (Listof Node)] [g : (Graph a b)]) : (Listof Node)
   (match vs
     [(list)
@@ -174,11 +176,13 @@
 (define-struct: (a) Tree ([e : a] [kids : (Listof (Tree a))])
   #:transparent)
 
+(: postorder (All (a) ((Tree a) -> (Listof a))))
 (define: (a) (postorder [t : (Tree a)]) : (Listof a)
   (match-define (Tree v ts) t)
   (append ((inst append-map a (Tree a)) postorder ts)
           (list v)))
 
+(: df (All (a b) ((Listof Node) (Graph a b) -> (values (Listof (Tree Node)) (Graph a b)))))
 (define: (a b) (df [vs : (Listof Node)] [g : (Graph a b)])
   : (values (Listof (Tree Node)) (Graph a b))
   (match vs
@@ -220,6 +224,7 @@
   (scc Figure1)
   (scc Figure1-p))
 
+(: bfs (All (a b) ((Listof Node) (Graph a b) -> (Listof Node))))
 (define: (a b) (bfs [vs : (Listof Node)] [g : (Graph a b)])
   : (Listof Node)
   (match vs
@@ -243,6 +248,7 @@
   : RTree
   (bf (list (list v)) g))
 
+(: bf (All (a b) (RTree (Graph a b) -> RTree)))
 (define: (a b) (bf [ps : RTree] [g : (Graph a b)])
   : RTree
   (match ps
@@ -305,6 +311,7 @@
 ;; XXX joinPaths (pg 23)
 ;; XXX joinAt (pg 23)
 
+(: indep (All (a b) ((Graph a b) -> (Listof Node))))
 (define: (a b) (indep [g : (Graph a b)])
   : (Listof Node)
   (cond
